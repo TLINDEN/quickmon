@@ -275,5 +275,10 @@ LOGS
   <body>
     <h4>NAME</h4>
     <div id="timeline" style="width: 900px; height: 500px;;"></div>
+    <div style="padding-top: 20px;">
+      <p>
+	<a href="https://github.com/TLINDEN/quickmon">Generated with Quickmon</a>
+      </p>
+    </div>
   </body>
 </html>

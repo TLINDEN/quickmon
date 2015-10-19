@@ -1,4 +1,4 @@
-## quickmon - Quick monitoring script for commandline using google graph
+## quickmon - graph generating monitoring script.
 
 This is the README file for the graph generator quickmon.
 
