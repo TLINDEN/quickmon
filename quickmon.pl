@@ -16,7 +16,7 @@ Getopt::Long::Configure( qw(no_ignore_case));
 use Time::HiRes qw/ gettimeofday /;
 
 my (@title, @command, $opt_h, $opt_v, $name, $loop, $plot, $fields, $sep, $ts, $tsid);
-my $VERSION = 0.03;
+my $VERSION = 0.04;
 my $tpl = join '', <DATA>;
 
 GetOptions (
@@ -43,8 +43,7 @@ if ($opt_v) {
 }
 
 if (! $name) {
-  print "-n required!\n";
-  &usage;
+  $name = $title[0];
 }
 
 if (defined $plot) {
@@ -208,6 +207,7 @@ sub run {
   $t =~ s/NAME/$name/g;
   $t =~ s/LOGS/$logs/;
   $t =~ s/TITLE/join '', @def/e;
+  $t =~ s/VERSION/$VERSION/;
   print IDX $t;
   close IDX;
 }
@@ -223,7 +223,7 @@ sub parse_ts {
 
 sub usage {
   print qq($0 Usage:
-$0 -t <title1> [-t <title2> ...] -c <command1> [-c <command2> ..] -n <name> [-l [<delay>]]
+$0 -t <title1> [-t <title2> ...] -c <command1> [-c <command2> ..] [-n <name>] [-l [<delay>]]
 $0 -t <title1> [-t <title2> ...] -p [<file>] [-f <N,..>]
 $0 [-hv]
 
@@ -242,6 +242,9 @@ running under -c.
 Use -l to make the script run forever in a loop (commands executed once per second).
 You may specify a delaytime, default is 1 second, floats are allowed. Ignored in pipe
 mode (-p).
+
+The option -n specifies the name of the html page (title). If not specified, the first
+title will be used.
 
 -h for help and -v for version.
 );
@@ -277,7 +280,7 @@ LOGS
     <div id="timeline" style="width: 900px; height: 500px;;"></div>
     <div style="padding-top: 20px;">
       <p>
-	<a href="https://github.com/TLINDEN/quickmon">Generated with Quickmon</a>
+	<a href="https://github.com/TLINDEN/quickmon">Generated with Quickmon VERSION</a>
       </p>
     </div>
   </body>
