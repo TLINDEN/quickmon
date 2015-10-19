@@ -16,7 +16,7 @@ Getopt::Long::Configure( qw(no_ignore_case));
 use Time::HiRes qw/ gettimeofday /;
 
 my (@title, @command, $opt_h, $opt_v, $name, $loop, $plot, $fields, $sep, $ts, $tsid, $median);
-my $VERSION = 0.04;
+my $VERSION = 0.05;
 my $tpl = join '', <DATA>;
 
 GetOptions (
@@ -185,7 +185,12 @@ sub run {
 	$def[$id] = "";
       }
       else {
-	$def[$id] = sprintf "        data.addColumn('number', '%s');\n", $title[$id];
+	if (! $median) {
+	  $def[$id] = sprintf "        data.addColumn('number', '%s');\n", $title[$id];
+	}
+	else {
+	  $def[$id] = '';
+	}
       }
     }
   }
@@ -248,7 +253,7 @@ sub run {
       }
       $prev = $med;
       foreach my $entry (@{$list}) {
-	$logs .= $entry->{data} . ' , ' . $entry->{val} . ' , ' . $use . "],\n";
+	$logs .= $entry->{data} . ' , ' . $use . "],\n";
       }
     }
   }
@@ -278,7 +283,7 @@ sub parse_ts {
 
 sub usage {
   print qq($0 Usage:
-$0 -t <title1> [-t <title2> ...] -c <command1> [-c <command2> ..] [-n <name>] [-l [<delay>]]
+$0 -t <title1> [-t <title2> ...] -c <command1> [-c <command2> ..] [-n <name>] [-l [<delay>]] [-m]
 $0 -t <title1> [-t <title2> ...] -p [<file>] [-f <N,..>]
 $0 [-hv]
 
@@ -300,6 +305,9 @@ mode (-p).
 
 The option -n specifies the name of the html page (title). If not specified, the first
 title will be used.
+
+If not running in pipe mode, and if only one graph is being rendered, -m can be used
+to show a second graph containing the median values of the first graph.
 
 -h for help and -v for version.
 );
