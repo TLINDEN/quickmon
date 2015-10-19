@@ -15,20 +15,21 @@ use Getopt::Long;
 Getopt::Long::Configure( qw(no_ignore_case));
 use Time::HiRes qw/ gettimeofday /;
 
-my (@title, @command, $opt_h, $opt_v, $name, $loop, $plot, $fields, $sep, $ts, $tsid);
+my (@title, @command, $opt_h, $opt_v, $name, $loop, $plot, $fields, $sep, $ts, $tsid, $median);
 my $VERSION = 0.04;
 my $tpl = join '', <DATA>;
 
 GetOptions (
-	    "title|t=s"      => \@title,
-	    "command|c=s"    => \@command,
-	    "name|n=s"       => \$name,
-	    "loop|l:s"       => \$loop,
-	    "help|h|?!"      => \$opt_h,
-	    "version|v!"     => \$opt_v,
-	    "plot|p:s"       => \$plot,
-	    "fields|f=s"     => \$fields,
+	    "title|t=s"          => \@title,
+	    "command|c=s"        => \@command,
+	    "name|n=s"           => \$name,
+	    "loop|l:s"           => \$loop,
+	    "help|h|?!"          => \$opt_h,
+	    "version|v!"         => \$opt_v,
+	    "plot|p:s"           => \$plot,
+	    "fields|f=s"         => \$fields,
 	    "fieldseparator|F=s" => \$sep,
+	    "median|m"           => \$median,
              );
 
 #
@@ -70,6 +71,13 @@ else {
     die "The number of commands and titles must match!\n";
   }
 
+  if ($median) {
+    if (scalar @title != 1) {
+      die "Median calculation only supported with one graph!\n";
+    }
+    push @title, "Median: $title[0]";
+  }
+
   $tsid=0; # not used in -c mode
   $plot = 0;
 }
@@ -84,6 +92,7 @@ if (defined $loop) {
       $wait = 1;
     }
   }
+
   while () {
     &run;
     sleep $wait;
@@ -115,7 +124,7 @@ sub run {
   open LOG, ">> $log" or die "Could not open $log for appending: $!\n";
   my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime(time);
   $year += 1900;
-  $mon++;
+  #$mon++;
 
   my (@result, @def);
 
@@ -152,12 +161,18 @@ sub run {
     # call the commands and store the results
     for (my $id=0; $id <= $#title; $id++) {
       next if ($id == $tsid && $plot);
+      if ($median && $title[$id] =~ /^Median:/) {
+	$def[$id] = sprintf "        data.addColumn('number', '%s');\n", $title[$id];
+	next;
+      }
+
       my $start = gettimeofday;
       open CMD, "$command[$id]|" or die "Could not execute $command[$id]:$!\n";
       my $line = <CMD>; # only use 1st line
       close CMD;
       $line |= '';
       chomp $line;
+
       my $stop = gettimeofday;
       if ($line !~ /^\s*\d+$/) {
 	$result[$id] = ($stop - $start);
@@ -165,6 +180,7 @@ sub run {
       else {
 	$result[$id] = $line;
       }
+
       if ($id == $tsid && $plot) {
 	$def[$id] = "";
       }
@@ -189,6 +205,7 @@ sub run {
 
   for (my $id=0; $id <= $#title; $id++) {
     next if ($id == $tsid && $plot);
+    next if ($title[$id] =~ /^Median:/);
     $stamp .= ", $result[$id]";
   }
   $stamp .= "],\n";
@@ -197,9 +214,47 @@ sub run {
 
 
   #
-  # open the whole log and create the index
+  # re-open the whole log and create the index
   open LOGS, "<$log" or die "Could not open (anymore?) $log:$!\n";
-  my $logs = join '', <LOGS>;
+  my @entries = <LOGS>;
+  my $logs;
+  if ($median) {
+    # parse all logs and calculate the median for every 9 entries
+    my (@chunks, $pos, $idx);
+    $pos = 1;
+    $idx = 0;
+    foreach my $entry (@entries) {
+      my($data, $val) = split / , /, $entry;
+      chomp $val;
+      $val =~ s/\].*$//;
+      push @{$chunks[$idx]}, {data => $data, val => $val, pos =>$pos};
+      if ($pos == 9) {
+	$pos = 1;
+	$idx++;
+      }
+      else {
+	$pos++;
+      }
+    }
+
+    $logs = '';
+    my $prev;
+    foreach my $list (@chunks) {
+      my @values = sort {$a <=> $b} map {$_->{val} } @{$list};
+      my $med = $values[ int((scalar @values) / 2) ];
+      my $use = $med;
+      if ($prev) {
+	$use = ($med + $prev) / 2;
+      }
+      $prev = $med;
+      foreach my $entry (@{$list}) {
+	$logs .= $entry->{data} . ' , ' . $entry->{val} . ' , ' . $use . "],\n";
+      }
+    }
+  }
+  else {
+    $logs = join '', @entries;
+  }
   close LOGS;
 
   open IDX, ">index.html" or die "Could not open index.html: $!\n";
@@ -216,7 +271,7 @@ sub run {
 sub parse_ts {
   my($ts, $format) = @_;
   my $strp = new DateTime::Format::Strptime(pattern => $format);
-  my $dt   = $strp->parse_datetime($ts) or die "geht net";
+  my $dt   = $strp->parse_datetime($ts) or die "Title date format parsing failed: $!";
   return ($dt->year(), $dt->month() - 1, $dt->day(), $dt->hour(), $dt->minute(), $dt->second());
 }
 
@@ -271,7 +326,7 @@ LOGS
         ]);
 
         var annotatedtimeline = new google.visualization.AnnotatedTimeLine(document.getElementById('timeline'));
-        annotatedtimeline.draw(data, {'displayAnnotations': true});
+        annotatedtimeline.draw(data, {'displayAnnotations': true, 'thickness': 2});
     }
     </script>
   </head>
