@@ -16,7 +16,7 @@ Getopt::Long::Configure( qw(no_ignore_case));
 use Time::HiRes qw/ gettimeofday /;
 
 my (@title, @command, $opt_h, $opt_v, $name, $loop, $plot, $fields, $sep, $ts, $tsid, $median);
-my $VERSION = 0.05;
+my $VERSION = 0.06;
 my $tpl = join '', <DATA>;
 
 GetOptions (
@@ -29,7 +29,7 @@ GetOptions (
 	    "plot|p:s"           => \$plot,
 	    "fields|f=s"         => \$fields,
 	    "fieldseparator|F=s" => \$sep,
-	    "median|m"           => \$median,
+	    "median|m:s"         => \$median,
              );
 
 #
@@ -71,11 +71,14 @@ else {
     die "The number of commands and titles must match!\n";
   }
 
-  if ($median) {
+  if (defined $median) {
     if (scalar @title != 1) {
       die "Median calculation only supported with one graph!\n";
     }
     push @title, "Median: $title[0]";
+    if (! $median) {
+      $median = 9;
+    }
   }
 
   $tsid=0; # not used in -c mode
@@ -225,36 +228,21 @@ sub run {
   my $logs;
   if ($median) {
     # parse all logs and calculate the median for every 9 entries
-    my (@chunks, $pos, $idx);
-    $pos = 1;
-    $idx = 0;
-    foreach my $entry (@entries) {
-      my($data, $val) = split / , /, $entry;
-      chomp $val;
-      $val =~ s/\].*$//;
-      push @{$chunks[$idx]}, {data => $data, val => $val, pos =>$pos};
-      if ($pos == 9) {
-	$pos = 1;
-	$idx++;
-      }
-      else {
-	$pos++;
-      }
+    my (@values, @dates, $pos, $len);
+    $len = scalar @entries;
+
+    for ($pos=0; $pos<$len; $pos++) {
+       my($date, $val) = split / , /, $entries[$pos];
+       chomp $val;
+       $val =~ s/\].*$//;
+       push @values, $val;
+       push @dates, $date;
     }
 
     $logs = '';
-    my $prev;
-    foreach my $list (@chunks) {
-      my @values = sort {$a <=> $b} map {$_->{val} } @{$list};
-      my $med = $values[ int((scalar @values) / 2) ];
-      my $use = $med;
-      if ($prev) {
-	$use = ($med + $prev) / 2;
-      }
-      $prev = $med;
-      foreach my $entry (@{$list}) {
-	$logs .= $entry->{data} . ' , ' . $use . "],\n";
-      }
+
+    for ($pos=0; $pos<$len; $pos++) {
+      $logs .= $dates[$pos] . ' , ' . getmedian($pos, int($median/2), @values) . "],\n";
     }
   }
   else {
@@ -280,10 +268,48 @@ sub parse_ts {
   return ($dt->year(), $dt->month() - 1, $dt->day(), $dt->hour(), $dt->minute(), $dt->second());
 }
 
+# extract median value from @list with $left values
+# left from $pos and $left values right from $pos,
+# modify $left if not enough room left from $pos.
+sub getmedian {
+  my($pos, $left, @list) = @_;
+  my $size  = scalar @list;
+  my $right = $left;
+  my $max   = ($left * 2) + 1;
+
+  if ($size <= $max) {
+    # array too small, use the whole thing
+    $left  = 0;
+    $right = $size - 1;
+  }
+  else {
+    # array is large enough
+    if ($pos - $left < 0) {
+      # not enough elements left from $pos, shift accordingly
+      $left  = 0;
+      $right = $max - 1;
+    }
+    elsif (($size - 1) - $pos <= $left) {
+      # not enough elements right from $pos, shift accordingly
+      $right = $size - 1;
+      $left  = $size - $max;
+    }
+    else {
+      # we're in the middle of the list
+      $left  = $pos - $left;
+      $right = $pos + $right;
+    }
+  }
+
+  my @sorted = sort { $a <=> $b } @list[$left .. $right];
+  my $median = $sorted[int(scalar @sorted / 2)];
+
+  return $median;
+}
 
 sub usage {
   print qq($0 Usage:
-$0 -t <title1> [-t <title2> ...] -c <command1> [-c <command2> ..] [-n <name>] [-l [<delay>]] [-m]
+$0 -t <title1> [-t <title2> ...] -c <command1> [-c <command2> ..] [-n <name>] [-l [<delay>]] [-m [<range>]]
 $0 -t <title1> [-t <title2> ...] -p [<file>] [-f <N,..>]
 $0 [-hv]
 
@@ -307,7 +333,9 @@ The option -n specifies the name of the html page (title). If not specified, the
 title will be used.
 
 If not running in pipe mode, and if only one graph is being rendered, -m can be used
-to show a second graph containing the median values of the first graph.
+to show a graph containing the median values of the first graph. By default the median
+will be taken from a range of 9 values but this can be modified with -m <range>. Note:
+the longer the range the smoother the graph.
 
 -h for help and -v for version.
 );
@@ -316,10 +344,16 @@ to show a second graph containing the median values of the first graph.
 
 1;
 
+
+
+
 __DATA__
-<html>
+<!DOCTYPE html>
+  <html lang="en">
   <head>
     <title>NAME</title>
+    <meta charset="UTF-8" />
+    <meta http-equiv="cache-control" content="no-cache"/>
     <script type="text/javascript" src="https://www.google.com/jsapi"></script>
     <script type="text/javascript">
       google.load("visualization", "1", {packages:["corechart", 'annotatedtimeline']});
@@ -334,7 +368,7 @@ LOGS
         ]);
 
         var annotatedtimeline = new google.visualization.AnnotatedTimeLine(document.getElementById('timeline'));
-        annotatedtimeline.draw(data, {'displayAnnotations': true, 'thickness': 2});
+        annotatedtimeline.draw(data, {'displayAnnotations': true, 'thickness': 1});
     }
     </script>
   </head>
