@@ -16,7 +16,7 @@ Getopt::Long::Configure( qw(no_ignore_case));
 use Time::HiRes qw/ gettimeofday /;
 
 my (@title, @command, $opt_h, $opt_v, $name, $loop, $plot, $fields, $sep, $ts, $tsid, $median);
-my $VERSION = 0.06;
+my $VERSION = 0.07;
 my $tpl = join '', <DATA>;
 
 GetOptions (
@@ -57,6 +57,7 @@ if (defined $plot) {
   }
 
   # look for format in title
+  $tsid = -1;
   for (my $id=0; $id <= $#title; $id++) {
     if ($title[$id] =~ /%/) {
       $ts = $title[$id];
@@ -81,7 +82,7 @@ else {
     }
   }
 
-  $tsid=0; # not used in -c mode
+  $tsid = -1; # not used in -c mode
   $plot = 0;
 }
 
@@ -202,7 +203,7 @@ sub run {
   # write it to the log
   my $stamp;
 
-  if ($tsid) {
+  if ($tsid >= 0) {
     $stamp = sprintf qq([new Date(%04d, %d, %d, %d, %d, %d) ),
       &parse_ts($result[$tsid], $ts);
   }
