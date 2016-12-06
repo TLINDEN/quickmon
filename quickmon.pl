@@ -16,7 +16,7 @@ Getopt::Long::Configure( qw(no_ignore_case));
 use Time::HiRes qw/ gettimeofday /;
 
 my (@title, @command, $opt_h, $opt_v, $name, $loop, $plot, $fields, $sep, $ts, $tsid, $median);
-my $VERSION = 0.07;
+my $VERSION = 0.08;
 my $tpl = join '', <DATA>;
 
 GetOptions (
@@ -357,7 +357,7 @@ __DATA__
     <meta http-equiv="cache-control" content="no-cache"/>
     <script type="text/javascript" src="https://www.google.com/jsapi"></script>
     <script type="text/javascript">
-      google.load("visualization", "1", {packages:["corechart", 'annotatedtimeline']});
+      google.load("visualization", "1", {packages:['annotationchart']});
       google.setOnLoadCallback(drawChart);
 
     function drawChart() {
@@ -368,8 +368,8 @@ __DATA__
 LOGS
         ]);
 
-        var annotatedtimeline = new google.visualization.AnnotatedTimeLine(document.getElementById('timeline'));
-        annotatedtimeline.draw(data, {'displayAnnotations': true, 'thickness': 1});
+        var annotatedtimeline = new google.visualization.AnnotationChart(document.getElementById('timeline'));
+        annotatedtimeline.draw(data, {'displayAnnotations': true, 'thickness': 1, 'dateFormat': 'dd.MM.yyyy HH:mm:ss'});
     }
     </script>
   </head>
