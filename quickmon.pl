@@ -15,22 +15,23 @@ use Getopt::Long;
 Getopt::Long::Configure( qw(no_ignore_case));
 use Time::HiRes qw/ gettimeofday /;
 
-my (@title, @command, $opt_h, $opt_v, $name, $loop, $plot, $fields, $sep, $ts, $tsid, $median);
+my (@title, @command, $opt_h, $opt_v, $name, $loop, $plot, $fields, $sep, $ts, $tsid, $median, $slice);
 my $VERSION = 0.08;
 my $tpl = join '', <DATA>;
 
 GetOptions (
-	    "title|t=s"          => \@title,
-	    "command|c=s"        => \@command,
-	    "name|n=s"           => \$name,
-	    "loop|l:s"           => \$loop,
-	    "help|h|?!"          => \$opt_h,
-	    "version|v!"         => \$opt_v,
-	    "plot|p:s"           => \$plot,
-	    "fields|f=s"         => \$fields,
-	    "fieldseparator|F=s" => \$sep,
-	    "median|m:s"         => \$median,
-             );
+            "title|t=s"          => \@title,
+            "command|c=s"        => \@command,
+            "name|n=s"           => \$name,
+            "loop|l:s"           => \$loop,
+            "help|h|?!"          => \$opt_h,
+            "version|v!"         => \$opt_v,
+            "plot|p:s"           => \$plot,
+            "fields|f=s"         => \$fields,
+            "fieldseparator|F=s" => \$sep,
+            "median|m:s"         => \$median,
+            "ringbuffer|r=s"     => \$slice,
+           );
 
 #
 # sanity checks
@@ -144,7 +145,7 @@ sub run {
     if ($fields) {
       my @filtered;
       foreach my $idx (@{$fields}) {
-	push @filtered, $result[$idx];
+        push @filtered, $result[$idx];
       }
       @result = @filtered;
     }
@@ -153,10 +154,10 @@ sub run {
     }
     for (my $id=0; $id <= $#title; $id++) {
       if ($id == $tsid && $plot) {
-	$def[$id] = "";
+        $def[$id] = "";
       }
       else {
-	$def[$id] = sprintf "        data.addColumn('number', '%s');\n", $title[$id];
+        $def[$id] = sprintf "        data.addColumn('number', '%s');\n", $title[$id];
       }
     }
   }
@@ -166,8 +167,8 @@ sub run {
     for (my $id=0; $id <= $#title; $id++) {
       next if ($id == $tsid && $plot);
       if ($median && $title[$id] =~ /^Median:/) {
-	$def[$id] = sprintf "        data.addColumn('number', '%s');\n", $title[$id];
-	next;
+        $def[$id] = sprintf "        data.addColumn('number', '%s');\n", $title[$id];
+        next;
       }
 
       my $start = gettimeofday;
@@ -179,22 +180,23 @@ sub run {
 
       my $stop = gettimeofday;
       if ($line !~ /^\s*\d+$/) {
-	$result[$id] = ($stop - $start);
+        # output not a number: use duration of command execution
+        $result[$id] = ($stop - $start);
       }
       else {
-	$result[$id] = $line;
+        $result[$id] = $line;
       }
 
       if ($id == $tsid && $plot) {
-	$def[$id] = "";
+        $def[$id] = "";
       }
       else {
-	if (! $median) {
-	  $def[$id] = sprintf "        data.addColumn('number', '%s');\n", $title[$id];
-	}
-	else {
-	  $def[$id] = '';
-	}
+        if (! $median) {
+          $def[$id] = sprintf "        data.addColumn('number', '%s');\n", $title[$id];
+        }
+        else {
+          $def[$id] = '';
+        }
       }
     }
   }
@@ -226,6 +228,14 @@ sub run {
   # re-open the whole log and create the index
   open LOGS, "<$log" or die "Could not open (anymore?) $log:$!\n";
   my @entries = <LOGS>;
+
+  if ($slice) {
+    my $l = $#entries;
+    if ($l > $slice) {
+      @entries = @entries[$l - $slice .. $l];
+    }
+  }
+
   my $logs;
   if ($median) {
     # parse all logs and calculate the median for every 9 entries
@@ -310,7 +320,7 @@ sub getmedian {
 
 sub usage {
   print qq($0 Usage:
-$0 -t <title1> [-t <title2> ...] -c <command1> [-c <command2> ..] [-n <name>] [-l [<delay>]] [-m [<range>]]
+$0 -t <title1> [-t <title2> ...] -c <command1> [-c <command2> ..] [-n <name>] [-l [<delay>]] [-m [<range>]] [-r <max>]
 $0 -t <title1> [-t <title2> ...] -p [<file>] [-f <N,..>]
 $0 [-hv]
 
@@ -337,6 +347,9 @@ If not running in pipe mode, and if only one graph is being rendered, -m can be 
 to show a graph containing the median values of the first graph. By default the median
 will be taken from a range of 9 values but this can be modified with -m <range>. Note:
 the longer the range the smoother the graph.
+
+If you only need to display the N latest entries logged, then you can use the -r option,
+to render only <max> entries.
 
 -h for help and -v for version.
 );
@@ -378,7 +391,7 @@ LOGS
     <div id="timeline" style="width: 900px; height: 500px;;"></div>
     <div style="padding-top: 20px;">
       <p>
-	<a href="https://github.com/TLINDEN/quickmon">Generated with Quickmon VERSION</a>
+    <a href="https://github.com/TLINDEN/quickmon">Generated with Quickmon VERSION</a>
       </p>
     </div>
   </body>
