@@ -3,6 +3,7 @@ use strict;
 use Data::Dumper;
 use DateTime::Format::Strptime;
 
+# as of 2019 we use the flash free variant:
 # https://developers.google.com/chart/interactive/docs/gallery/annotationchart
 
 #
@@ -17,22 +18,24 @@ use Getopt::Long;
 Getopt::Long::Configure( qw(no_ignore_case));
 use Time::HiRes qw/ gettimeofday /;
 
-my (@title, @command, $opt_h, $opt_v, $name, $loop, $plot, $fields, $sep, $ts, $tsid, $median);
-my $VERSION = 0.08;
+my (@title, @command, $opt_h, $opt_v, $name, $loop, $plot,
+    $unit, $fields, $sep, $ts, $tsid, $median);
+my $VERSION = 0.09;
 my $tpl = join '', <DATA>;
 
 GetOptions (
-	    "title|t=s"          => \@title,
-	    "command|c=s"        => \@command,
-	    "name|n=s"           => \$name,
-	    "loop|l:s"           => \$loop,
-	    "help|h|?!"          => \$opt_h,
-	    "version|v!"         => \$opt_v,
-	    "plot|p:s"           => \$plot,
-	    "fields|f=s"         => \$fields,
-	    "fieldseparator|F=s" => \$sep,
-	    "median|m:s"         => \$median,
-             );
+            "title|t=s"          => \@title,
+            "command|c=s"        => \@command,
+            "name|n=s"           => \$name,
+            "loop|l:s"           => \$loop,
+            "help|h|?!"          => \$opt_h,
+            "version|v!"         => \$opt_v,
+            "plot|p:s"           => \$plot,
+            "fields|f=s"         => \$fields,
+            "fieldseparator|F=s" => \$sep,
+            "median|m:s"         => \$median,
+            "unit|u:s"           => \$unit,
+           );
 
 #
 # sanity checks
@@ -47,6 +50,10 @@ if ($opt_v) {
 
 if (! $name) {
   $name = $title[0];
+}
+
+if (!$unit) {
+  $unit = "Mbit/s";
 }
 
 if (defined $plot) {
@@ -84,16 +91,15 @@ else {
     }
   }
 
-  $tsid = -1; # not used in -c mode
+  $tsid = -1;                   # not used in -c mode
   $plot = 0;
 }
-
 
 
 if (defined $loop) {
   my $wait = 1;
   if (length($loop) > 0) {
-    $wait = $loop + 0; # make sure it's a number
+    $wait = $loop + 0;          # make sure it's a number
     if ($wait == 0) {
       $wait = 1;
     }
@@ -103,8 +109,7 @@ if (defined $loop) {
     &run;
     sleep $wait;
   }
-}
-elsif ($plot) {
+} elsif ($plot) {
   if ($fields) {
     my @fields = split /,/, $fields;
     $fields = \@fields;
@@ -130,11 +135,11 @@ sub run {
   open LOG, ">> $log" or die "Could not open $log for appending: $!\n";
   my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime(time);
   $year += 1900;
-  #$mon++;
+
 
   my (@result, @def);
 
-  if ($input) {
+  if (defined $input) {
     #
     # read one line of PLOT file
     if ($sep) {
@@ -146,7 +151,7 @@ sub run {
     if ($fields) {
       my @filtered;
       foreach my $idx (@{$fields}) {
-	push @filtered, $result[$idx];
+        push @filtered, $result[$idx];
       }
       @result = @filtered;
     }
@@ -155,10 +160,10 @@ sub run {
     }
     for (my $id=0; $id <= $#title; $id++) {
       if ($id == $tsid && $plot) {
-	$def[$id] = "";
+        $def[$id] = "";
       }
       else {
-	$def[$id] = sprintf "        data.addColumn('number', '%s');\n", $title[$id];
+        $def[$id] = sprintf "        data.addColumn('number', '%s');\n", $title[$id];
       }
     }
   }
@@ -168,35 +173,35 @@ sub run {
     for (my $id=0; $id <= $#title; $id++) {
       next if ($id == $tsid && $plot);
       if ($median && $title[$id] =~ /^Median:/) {
-	$def[$id] = sprintf "        data.addColumn('number', '%s');\n", $title[$id];
-	next;
+        $def[$id] = sprintf "        data.addColumn('number', '%s');\n", $title[$id];
+        next;
       }
 
       my $start = gettimeofday;
       open CMD, "$command[$id]|" or die "Could not execute $command[$id]:$!\n";
-      my $line = <CMD>; # only use 1st line
+      my $line = <CMD>;         # only use 1st line
       close CMD;
       $line |= '';
       chomp $line;
 
       my $stop = gettimeofday;
       if ($line !~ /^\s*\d+$/) {
-	$result[$id] = ($stop - $start);
+        $result[$id] = ($stop - $start);
       }
       else {
-	$result[$id] = $line;
+        $result[$id] = $line;
       }
 
       if ($id == $tsid && $plot) {
-	$def[$id] = "";
+        $def[$id] = "";
       }
       else {
-	if (! $median) {
-	  $def[$id] = sprintf "        data.addColumn('number', '%s');\n", $title[$id];
-	}
-	else {
-	  $def[$id] = '';
-	}
+        if (! $median) {
+          $def[$id] = sprintf "        data.addColumn('number', '%s');\n", $title[$id];
+        }
+        else {
+          $def[$id] = '';
+        }
       }
     }
   }
@@ -235,11 +240,11 @@ sub run {
     $len = scalar @entries;
 
     for ($pos=0; $pos<$len; $pos++) {
-       my($date, $val) = split / , /, $entries[$pos];
-       chomp $val;
-       $val =~ s/\].*$//;
-       push @values, $val;
-       push @dates, $date;
+      my($date, $val) = split / , /, $entries[$pos];
+      chomp $val;
+      $val =~ s/\].*$//;
+      push @values, $val;
+      push @dates, $date;
     }
 
     $logs = '';
@@ -256,6 +261,7 @@ sub run {
   open IDX, ">index.html" or die "Could not open index.html: $!\n";
   my $t = $tpl;
   $t =~ s/NAME/$name/g;
+  $t =~ s/UNIT/$unit/g;
   $t =~ s/LOGS/$logs/;
   $t =~ s/TITLE/join '', @def/e;
   $t =~ s/VERSION/$VERSION/;
@@ -291,8 +297,7 @@ sub getmedian {
       # not enough elements left from $pos, shift accordingly
       $left  = 0;
       $right = $max - 1;
-    }
-    elsif (($size - 1) - $pos <= $left) {
+    } elsif (($size - 1) - $pos <= $left) {
       # not enough elements right from $pos, shift accordingly
       $right = $size - 1;
       $left  = $size - $max;
@@ -348,47 +353,45 @@ the longer the range the smoother the graph.
 1;
 
 
-
-
 __DATA__
 <!DOCTYPE html>
-<html lang="en">
- <head>
+  <html lang="en">
+  <head>
   <title>NAME</title>
   <meta charset="UTF-8" />
   <meta http-equiv="cache-control" content="no-cache"/>
   <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
   <script type="text/javascript">
-     google.charts.load('current', {'packages':['annotationchart']});
-     google.charts.setOnLoadCallback(drawChart);
+  google.charts.load('current', {'packages':['annotationchart']});
+google.charts.setOnLoadCallback(drawChart);
 
-     function drawChart() {
-        var data = new google.visualization.DataTable();
-        data.addColumn('datetime', 'Date');
-        TITLE
-        data.addRows([
-LOGS
-        ]);
+function drawChart() {
+  var data = new google.visualization.DataTable();
+  data.addColumn('datetime', 'Date');
+  TITLE
+    data.addRows([
+                  LOGS
+                 ]);
 
-        var chart = new google.visualization.AnnotationChart(document.getElementById('timeline'));
+  var chart = new google.visualization.AnnotationChart(document.getElementById('timeline'));
 
-        var options = {
-                     displayAnnotations: true,
-                     thickness: 1,
-                     allValuesSuffix: '&nbsp;Mbit/s'
-        };
+  var options = {
+               displayAnnotations: true,
+               thickness: 1,
+               allValuesSuffix: '-UNIT'
+                };
 
-        chart.draw(data, options);
-    }
-    </script>
+  chart.draw(data, options);
+}
+</script>
   </head>
   <body>
-    <h4>NAME</h4>
-    <div id="timeline" style="width: 900px; height: 500px;;"></div>
-    <div style="padding-top: 20px;">
-      <p>
-        <a href="https://github.com/TLINDEN/quickmon">Generated with Quickmon VERSION</a>
-      </p>
-    </div>
+  <h4>NAME</h4>
+  <div id="timeline" style="width: 900px; height: 500px;;"></div>
+  <div style="padding-top: 20px;">
+  <p>
+  <a href="https://github.com/TLINDEN/quickmon">Generated with Quickmon VERSION</a>
+  </p>
+  </div>
   </body>
-</html>
+  </html>
